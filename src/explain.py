@@ -1,3 +1,4 @@
+import sys
 import argparse
 from pathlib import Path
 import torch
@@ -6,6 +7,10 @@ from torch_geometric.explain import Explainer, GNNExplainer
 from torch_geometric.explain.metric import (fidelity, characterization_score, fidelity_curve_auc, unfaithfulness)
 from torch.utils.data import DataLoader
 from typing import List, Optional, Tuple, Dict
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
 from src.data.graph_datamodule import HMSDataModule 
 from src.lightning_trainer.graph_lightning_module import HMSLightningModule
 from src.models.hms_model import HMSMultiModalGNN

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import argparse
 import random
 from pathlib import Path
@@ -15,6 +16,10 @@ from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, Mode
 from pytorch_lightning.loggers import WandbLogger
 from sklearn.model_selection import GroupKFold
 from torch.utils.data import DataLoader
+
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 from src.data.raw_datamodule import RawEEGDataModule
 from src.lightning_trainer.mlp_lightning_module import EEGMLPLightningModule

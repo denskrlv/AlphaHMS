@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import argparse
 import json
 import pickle
@@ -12,6 +13,10 @@ import matplotlib.pyplot as plt
 import torch
 from torch_geometric.data import Batch
 
+
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 from src.lightning_trainer.graph_lightning_module import HMSLightningModule
 

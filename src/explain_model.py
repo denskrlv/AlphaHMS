@@ -1,7 +1,13 @@
+import sys
+from pathlib import Path
 import argparse
 import torch
 from torch_geometric.data import Batch
 from torch_geometric.explain import Explainer, GNNExplainer
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
 from src.lightning_trainer.graph_lightning_module import HMSLightningModule
 from src.models.hms_model import HMSMultiModalGNN
 from src.models.explainer_wrappers import ExplanationWrapper
