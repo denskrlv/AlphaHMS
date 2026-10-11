@@ -18,7 +18,7 @@ def inspect_processed_data():
     if not processed_dir.exists():
         print("\n❌ Error: Processed data directory not found!")
         print("   Please run preprocessing first:")
-        print("   python src/data/make_dataset.py")
+        print("   python src/data/make_graph_dataset.py")
         return
     
     # Load metadata
@@ -32,7 +32,7 @@ def inspect_processed_data():
         if len(patient_files) == 0:
             print("\n❌ Error: No patient files found!")
             print("   Please run preprocessing first:")
-            print("   python src/data/make_dataset.py")
+            print("   python src/data/make_graph_dataset.py")
             return
         
         patient_ids = [int(f.stem.split('_')[1]) for f in patient_files]

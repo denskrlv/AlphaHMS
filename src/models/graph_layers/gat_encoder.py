@@ -28,7 +28,7 @@ class GATEncoder(nn.Module):
     dropout_p : float
         Dropout probability
     use_edge_attr : bool
-        Whether to use edge attributes (e.g., coherence values)
+        Whether to use edge attributes (e.g., edge weights)
     """
     
     def __init__(

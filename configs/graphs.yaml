@@ -38,11 +38,8 @@ eeg:
     beta: [13.0, 30.0]
     gamma: [30.0, 50.0]
 
-  # Amplitude Envelope Correlation (AEC) for edge construction
-  aec:
-    threshold: 0.7 # Minimum AEC to create edge (correlation of amplitude envelopes)
-    # AEC uses Hilbert transform to extract amplitude envelopes
-    # Then computes Pearson correlation between envelopes
+  # Edges use fixed physical electrode adjacency (10-20 system),
+  # defined as ELECTRODE_ADJACENCY in src/data/utils/eeg_process.py
 
   # PSD computation parameters
   psd:

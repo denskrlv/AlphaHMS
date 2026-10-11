@@ -1,5 +1,5 @@
 """
-Pytest tests for checkpoint/resume functionality of make_dataset.py
+Pytest tests for checkpoint/resume functionality of make_graph_dataset.py
 """
 
 import sys

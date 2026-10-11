@@ -15,7 +15,7 @@ sys.path.insert(0, str(project_root))
 
 from omegaconf import OmegaConf
 from src.data.utils.eeg_process import EEGGraphBuilder, select_eeg_channels
-from src.data.utils.spectrogram_process import SpectrogramGraphBuilder
+from src.data.utils.spectrogram_process import SpectrogramGraphBuilder, filter_spectrogram_columns
 
 
 @pytest.fixture
@@ -32,8 +32,7 @@ def eeg_builder(config):
         window_size=config.eeg.window_size,
         stride=config.eeg.stride,
         bands=dict(config.eeg.bands),
-        coherence_threshold=config.eeg.coherence.threshold,
-        nperseg_factor=config.eeg.coherence.nperseg_factor,
+        nperseg_factor=config.eeg.psd.nperseg_factor,
         channels=list(config.eeg.channels),
         # Preprocessing parameters
         apply_bandpass=config.eeg.preprocessing.bandpass_filter.enabled,
@@ -56,7 +55,10 @@ def spec_builder(config):
         regions=list(config.spectrogram.regions),
         bands=dict(config.spectrogram.bands),
         aggregation=config.spectrogram.aggregation,
-        spatial_edges=config.spectrogram.spatial_edges
+        spatial_edges=config.spectrogram.spatial_edges,
+        apply_preprocessing=config.spectrogram.preprocessing.enabled,
+        clip_min=config.spectrogram.preprocessing.clip_min,
+        clip_max=config.spectrogram.preprocessing.clip_max
     )
 
 
@@ -149,6 +151,8 @@ def test_spectrogram_processing(config, spec_builder, train_df):
         (spec_df['time'] < spec_offset + 600)
     ]
     
+    spec_window_df = filter_spectrogram_columns(spec_window_df, list(config.spectrogram.regions))
+    
     assert len(spec_window_df) > 0, "Spectrogram window is empty"
     
     # Build graphs
@@ -159,7 +163,7 @@ def test_spectrogram_processing(config, spec_builder, train_df):
     # Check first graph structure
     graph = spec_graphs[0]
     assert graph.x.shape[0] == 4, f"Expected 4 nodes, got {graph.x.shape[0]}"
-    assert graph.x.shape[1] == 5, f"Expected 5 features per node, got {graph.x.shape[1]}"
+    assert graph.x.shape[1] == 4, f"Expected 4 features per node, got {graph.x.shape[1]}"
     assert graph.edge_index.shape == (2, 8), f"Expected edge_index shape (2, 8), got {graph.edge_index.shape}"
 
 
@@ -187,38 +191,28 @@ def test_eeg_band_power_computation(eeg_builder, train_df, config):
     first_window = eeg_array[:2000, :]
     
     # Compute band power
-    band_power = eeg_builder.compute_band_power(first_window)
+    band_power = eeg_builder.compute_psd(first_window)
     
     assert band_power.shape == (19, 5), f"Expected (19, 5), got {band_power.shape}"
     assert not (band_power < 0).any(), "Band power should be non-negative"
     assert not pd.isna(band_power).any(), "Band power contains NaN values"
 
 
-def test_eeg_coherence_computation(eeg_builder, train_df, config):
-    """Test that coherence computation returns valid edges."""
-    row = train_df.iloc[0]
+def test_eeg_physical_adjacency_edges(eeg_builder):
+    """Test that EEG edges follow symmetric, unweighted 10-20 electrode adjacency."""
+    edge_index, edge_attr = eeg_builder.compute_physical_adjacency_edges()
     
-    # Load and extract EEG
-    eeg_path = f"{config.paths.train_eegs}/{row.eeg_id}.parquet"
-    eeg_df = pd.read_parquet(eeg_path)
-    eeg_offset = int(row.eeg_label_offset_seconds)
-    eeg_window = eeg_df.iloc[eeg_offset*200:(eeg_offset+50)*200]
-    eeg_array = select_eeg_channels(eeg_window, list(config.eeg.channels))
+    assert edge_index.shape == (2, 64), f"Expected edge_index shape (2, 64), got {edge_index.shape}"
+    assert edge_attr.shape == (64, 1), f"Expected edge_attr shape (64, 1), got {edge_attr.shape}"
+    assert (edge_attr == 1).all(), "Edges should be unweighted"
+    assert (edge_index >= 0).all() and (edge_index < 19).all(), "Edge indices out of range"
     
-    # Get first 10s window
-    first_window = eeg_array[:2000, :]
+    # Every edge should have its reverse (undirected graph)
+    edges = set(map(tuple, edge_index.T.tolist()))
+    assert all((dst, src) in edges for src, dst in edges), "Adjacency should be symmetric"
     
-    # Compute coherence
-    edge_index, edge_attr = eeg_builder.compute_coherence_matrix(first_window)
-    
-    assert edge_index.shape[0] == 2, "Edge index should have 2 rows"
-    assert edge_attr.shape[1] == 1, "Edge attributes should have 1 feature"
-    assert edge_attr.shape[0] == edge_index.shape[1], "Edge attr and index mismatch"
-    
-    # Check that all coherence values are in valid range
-    if edge_attr.shape[0] > 0:
-        assert (edge_attr >= 0).all(), "Coherence should be non-negative"
-        assert (edge_attr <= 1).all(), "Coherence should be <= 1"
+    # No self-loops
+    assert all(src != dst for src, dst in edges), "Graph should not contain self-loops"
 
 
 def test_eeg_preprocessing(eeg_builder):
