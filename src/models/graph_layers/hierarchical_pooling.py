@@ -57,8 +57,9 @@ class HierarchicalPoolingLayer(nn.Module):
     Parameters
     ----------
     channels : List[str], optional
-        List of channel names (for EEG). If provided, creates channel-to-region mapping.
-        If None, assumes input is already regional (e.g., spectrogram).
+        List of channel names. EEG channel names create a channel-to-region mapping.
+        If None, or if none of the names are EEG channels (e.g. spectrogram regions
+        LL, RL, LP, RP), the input is assumed to be already regional.
     num_regions : int
         Number of output regions (default: 4)
     pooling_method : str
@@ -80,11 +81,15 @@ class HierarchicalPoolingLayer(nn.Module):
         if self.pooling_method not in ("mean", "max", "sum"):
             raise ValueError(f"Unsupported pooling method: {self.pooling_method}")
         
-        # Build channel-to-region mapping if channels are provided
-        if channels is not None:
+        # Build channel-to-region mapping if EEG channels are provided
+        if channels is not None and any(ch in EEG_CHANNEL_TO_REGION for ch in channels):
             self.channel_to_region = self._build_channel_to_region_mapping(channels)
         else:
             # For spectrogram: identity mapping (4 nodes → 4 regions)
+            if channels is not None and len(channels) != num_regions:
+                raise ValueError(
+                    f"Expected {num_regions} regional nodes, got {len(channels)}: {channels}"
+                )
             self.channel_to_region = None
     
     def _build_channel_to_region_mapping(self, channels: List[str]) -> torch.Tensor:
@@ -100,10 +105,11 @@ class HierarchicalPoolingLayer(nn.Module):
         torch.Tensor
             Tensor of shape (num_channels,) where element i is the region index for channel i
         """
-        region_mapping = []
-        for ch in channels:
-            region_idx = EEG_CHANNEL_TO_REGION.get(ch, 0)  # Default to region 0 if not found
-            region_mapping.append(region_idx)
+        unknown = [ch for ch in channels if ch not in EEG_CHANNEL_TO_REGION]
+        if unknown:
+            raise ValueError(f"Unknown EEG channels for regional pooling: {unknown}")
+        
+        region_mapping = [EEG_CHANNEL_TO_REGION[ch] for ch in channels]
         
         return torch.tensor(region_mapping, dtype=torch.long)
     
