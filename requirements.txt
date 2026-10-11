@@ -1,0 +1,28 @@
+# Python 3.11 recommended (3.10+ required)
+#
+# The default PyPI torch wheel supports CUDA on Linux and MPS on Apple Silicon.
+# For a specific CUDA build, install torch first from https://pytorch.org/get-started/locally/
+
+# Deep learning
+torch>=2.1
+torch_geometric>=2.5
+pytorch-lightning>=2.1
+torchmetrics
+
+# Scientific stack
+numpy<2
+pandas
+pyarrow
+scipy
+scikit-learn
+matplotlib
+
+# Config, logging, utilities
+omegaconf
+wandb
+tqdm
+
+# Notebook, data download, tests
+jupyter
+kaggle
+pytest

@@ -9,3 +9,4 @@ explanations/
 checkpoints/
 .DS_Store
 wandb/
+.venv/

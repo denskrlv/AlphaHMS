@@ -71,6 +71,7 @@ AlphaHMS/
 │   └── explain_model.py
 ├── tests/                         # Pytest suite
 ├── inspect_data.py                # Quick data inspection utility
+├── requirements.txt               # pip / uv dependencies
 ├── environment.yaml               # Conda environment specification
 └── pytest.ini
 ```
@@ -79,22 +80,41 @@ AlphaHMS/
 
 ## 🛠️ Installation
 
-### 1. Create the Conda environment
+Requires **Python 3.10+** (3.11 recommended).
+
+### Option A: pip / uv (no Conda)
+
+With [uv](https://docs.astral.sh/uv/) (downloads Python 3.11 if needed):
+
+```bash
+uv venv --python 3.11
+source .venv/bin/activate
+uv pip install -r requirements.txt
+```
+
+Or with plain `venv` + pip:
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+The default PyPI `torch` wheel supports CUDA on Linux and MPS on Apple Silicon. To pin a specific CUDA build, install PyTorch first from [pytorch.org](https://pytorch.org/get-started/locally/) (e.g. `pip install torch --index-url https://download.pytorch.org/whl/cu121`), then install the requirements.
+
+### Option B: Conda
 
 ```bash
 conda env create -f environment.yaml -y
 conda activate graph
 ```
 
-### 2. Install PyTorch with the correct CUDA wheel
-
 The environment file deliberately omits PyTorch so you can match your local CUDA version. For CUDA 12.1:
 
 ```bash
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install torch_geometric
 ```
-
-You will also need **PyTorch Geometric** matching your PyTorch / CUDA build — follow the [official install guide](https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html).
 
 ---
 
