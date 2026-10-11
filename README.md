@@ -30,6 +30,9 @@ AlphaHMS is a deep-learning pipeline for classifying harmful brain activity from
 
 ```
 AlphaHMS/
+├── assets/
+│   ├── architecture.svg           # Architecture figure
+│   └── make_architecture_figure.py
 ├── configs/                       # OmegaConf YAML configs
 │   ├── graphs.yaml                # Preprocessing parameters
 │   ├── model.yaml                 # Multi-modal GNN architecture
@@ -206,6 +209,12 @@ For the GNN models, the best checkpoint is evaluated automatically at the end of
 ---
 
 ## 🏗️ Model Architecture
+
+<p align="center">
+  <img src="assets/architecture.svg" alt="AlphaHMS architecture: scalp EEG and montage spectrograms are windowed into temporal graph sequences, encoded with GATv2, pooled into regions, modelled with BiLSTMs, fused with bidirectional cross-attention, and classified into six classes" width="100%" />
+</p>
+
+<sub>**Figure 1.** AlphaHMS pipeline. **(a)** 19-channel scalp EEG (10–20 system); electrode colours mark the clinical regions used for pooling, dashed lines the bipolar chains behind the provided spectrograms. **(b)** EEG is filtered and split into 9 overlapping 10 s windows; spectrograms are log-normalised and split into 119 windows. **(c)** Each window becomes a graph: 19 electrode nodes with 5 PSD band features and 10–20 adjacency edges (EEG), or 4 region nodes with 4 band-power features and fixed spatial edges (spectrogram). **(d)** A shared GATv2 encoder embeds every graph; EEG nodes are mean-pooled into 4 regions. **(e)** A 2-layer BiLSTM models each sequence, attention biased towards the labelled window pools it into one vector, and a linear layer expands that into 4 regional tokens per modality. **(f)** Bidirectional cross-attention fuses the modalities; per-region features are concatenated and attention-pooled. **(g)** An MLP outputs a 6-class distribution trained with KL divergence against the expert-vote distribution. Regenerate with `python assets/make_architecture_figure.py`.</sub>
 
 The multi-modal model (see [configs/model.yaml](configs/model.yaml)) is composed of:
 
