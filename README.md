@@ -16,7 +16,7 @@ AlphaHMS is a deep-learning pipeline for classifying harmful brain activity from
 
 ## ✨ Highlights
 
-- 🕸️ **Graph-based EEG modelling** — each 50 s EEG recording is split into 9 overlapping 10 s windows; nodes are the 19 EEG channels and edges are derived from inter-channel coherence (threshold 0.5).
+- 🕸️ **Graph-based EEG modelling** — each 50 s EEG recording is split into 9 overlapping 10 s windows; nodes are the 19 EEG channels and edges follow physical electrode adjacency in the 10-20 system.
 - 🌈 **Graph-based spectrogram modelling** — 600 s spectrograms are split into 119 windows over 4 spatial regions (LL, RL, LP, RP) with fixed spatial connectivity.
 - 🧩 **Hierarchical pooling** by clinical brain regions (Frontal, Central, Parietal, Occipital) before temporal modelling.
 - 🔀 **Cross-modal fusion** with multi-head attention between EEG and spectrogram regional embeddings.
@@ -92,7 +92,6 @@ The environment file deliberately omits PyTorch so you can match your local CUDA
 
 ```bash
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-pip install torcheeg
 ```
 
 You will also need **PyTorch Geometric** matching your PyTorch / CUDA build — follow the [official install guide](https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html).
@@ -126,11 +125,15 @@ data/raw/
 jupyter execute notebooks/eda.ipynb
 ```
 
+Among other things, this writes `data/raw/train_unique.csv` (duplicates of `train.csv` removed), which every later step reads.
+
 ### 3. Build the graph dataset
 
 ```bash
 python src/data/make_graph_dataset.py
 ```
+
+Use `--workers N` to control the number of processes. Preprocessing is resumable: patients already written to `data/processed/` are skipped.
 
 This produces one `data/processed/patient_{id}.pt` per patient plus a `metadata.pt` index. See [src/data/README.md](src/data/README.md) for full details on graph construction, output format, and memory requirements.
 
@@ -146,11 +149,17 @@ All training scripts log to **Weights & Biases**; run `wandb login` once before 
 python src/train.py --train-config configs/train.yaml
 ```
 
-### Cross-validation (5-fold)
+### Cross-validation
+
+`configs/train.yaml` uses 5 folds and `configs/train_4fold.yaml` uses 4 folds. Each run trains a single fold (`data.current_fold`); select the fold with `--fold`:
 
 ```bash
-python src/train.py --train-config configs/train_4fold.yaml
+python src/train.py --train-config configs/train_4fold.yaml --fold 1
 ```
+
+Note that `--fold` writes the new `current_fold` back into the config file.
+
+Resume an interrupted run with `--resume path/to/checkpoint.ckpt`.
 
 ### EEG-only GNN baseline
 
@@ -164,13 +173,15 @@ python src/train.py --train-config configs/train_eeg.yaml
 python src/train_mlp.py --config configs/training_mlp.yaml
 ```
 
+This runs patient-level K-fold cross-validation (`--n_splits`, default 5).
+
 ### Quick smoke test
 
 ```bash
 python src/train.py --train-config configs/smoke_test.yaml
 ```
 
-Evaluation runs automatically at the end of training. Checkpoints are written to the directory specified in the config.
+For the GNN models, the best checkpoint is evaluated automatically at the end of training, and checkpoints are written to `checkpoints/`. The MLP baseline writes per-fold checkpoints under `checkpointing.dirpath` in its config (`artifacts/checkpoints/fold_<k>`).
 
 ---
 
@@ -178,8 +189,8 @@ Evaluation runs automatically at the end of training. Checkpoints are written to
 
 The multi-modal model (see [configs/model.yaml](configs/model.yaml)) is composed of:
 
-1. **EEG encoder** — 2-layer multi-head GAT (64-dim, 4 heads) with coherence edge weights → hierarchical regional pooling → 2-layer BiLSTM (128-dim, bidirectional).
-2. **Spectrogram encoder** — 2-layer GAT (64-dim, 4 heads) over the 4 spatial regions → BiLSTM (128-dim, bidirectional).
+1. **EEG encoder** — 2-layer multi-head GATv2 (64-dim, 4 heads) over the electrode-adjacency graph → hierarchical regional pooling → 2-layer BiLSTM (128-dim, bidirectional).
+2. **Spectrogram encoder** — 2-layer GATv2 (64-dim, 4 heads) over the 4 spatial regions → 2-layer BiLSTM (128-dim, bidirectional).
 3. **Cross-modal fusion** — multi-head cross-attention (8 heads, 256-dim) between EEG and spectrogram regional embeddings, with attention pooling over regions.
 4. **Classifier** — MLP with hidden sizes `[256, 128]`, ELU activations, dropout 0.3 → 6-class softmax.
 
@@ -190,12 +201,17 @@ Loss defaults to **KL divergence** against the soft expert-vote distribution; cl
 ## 🔬 Explainability
 
 ```bash
-# GNNExplainer over a trained checkpoint
-python src/explain.py
+# GNNExplainer over test samples of a fold
+python src/explain.py --model_path checkpoints/last.ckpt --current_fold 0 --num_explain 5
+
+# GNNExplainer on a single patient file
+python src/explain_model.py --model_path checkpoints/last.ckpt --data_path data/processed/patient_<id>.pt
 
 # Attention-weight visualisation
-python src/explain_attention.py
+python src/explain_attention.py --model_path checkpoints/last.ckpt --data_path data/processed/patient_<id>.pt
 ```
+
+`explain.py` saves results to `explanations/` and `explain_attention.py` to `explanations/attention/`; `explain_model.py` prints its results.
 
 ---
 
@@ -205,7 +221,7 @@ python src/explain_attention.py
 pytest
 ```
 
-The test suite covers the data module, preprocessing pipeline, multiprocessing, regularization, checkpoint resume, and spectrogram processing.
+The test suite covers the data module, preprocessing pipeline, multiprocessing, regularization, checkpoint resume, and spectrogram processing. The data module, pipeline, and multiprocessing tests need the raw and processed data (`data/raw/`, `data/processed/`); `test_regularization.py` and `test_spectrogram_preprocessing.py` run without it.
 
 ---
 
@@ -222,12 +238,18 @@ The test suite covers the data module, preprocessing pipeline, multiprocessing, 
 If you use AlphaHMS in your research or build upon it, please cite this repository:
 
 ```bibtex
-@software{krylov2025alphahms,
-  author       = {Denis Krylov, Samuel Goldie, Alberto Pasinato, Serkan Akin, Leonardo Lago},
+@software{kgpal2025alphahms,
+  author       = {Denis Krylov and Samuel Goldie and Alberto Pasinato and Serkan Akin and Leonardo Lago},
   title        = {{AlphaHMS}: Multi-modal Graph Neural Networks for Harmful Brain Activity Classification},
   year         = {2025},
   institution  = {Delft University of Technology},
-  url          = {https://github.com/deniskrylov/AlphaHMS},
+  url          = {https://github.com/denskrlv/AlphaHMS},
   note         = {Built for the HMS Harmful Brain Activity Classification challenge (Kaggle)}
 }
 ```
+
+---
+
+## 📄 License
+
+Released under the [MIT License](LICENSE).
